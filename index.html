@@ -1,0 +1,165 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>COOLT EDITOR</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@font-face{font-family:Gotthard;src:url(gotthard.otf)}
+:root{--bg:#0a0a0c;--c:#15151a;--l:#2a2a32;--t:#f4f4f4;--m:#8b8b96}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--t);font:14px system-ui,-apple-system,sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column}
+header{flex:none;display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;padding-top:max(8px,env(safe-area-inset-top))}
+header img{height:15px}header b{letter-spacing:.4em;font-size:11px;font-weight:600}
+#stage{flex:none;display:flex;justify-content:center;padding:0 8px 8px}
+canvas{display:block;width:min(calc(100vw - 16px),50vh,620px);aspect-ratio:1;border:1px solid var(--l);border-radius:4px;box-shadow:0 8px 40px #000a;touch-action:none;cursor:grab}
+#panel{flex:1;overflow-y:auto;padding:0 12px 14px;max-width:680px;width:100%;margin:0 auto;border-top:1px solid var(--l)}
+nav{position:sticky;top:0;z-index:2;display:flex;gap:4px;padding:8px 0;background:var(--bg)}
+nav button{flex:1;padding:10px 2px;border:0;border-bottom:2px solid var(--l);background:none;color:var(--m);font:600 11px inherit;letter-spacing:.12em;text-transform:uppercase}
+nav button.on{color:#fff;border-color:#fff}
+section{display:none}section.on{display:block}
+h3{margin:18px 0 2px;font-size:11px;letter-spacing:.2em;color:var(--m);text-transform:uppercase}
+.r{display:grid;grid-template-columns:96px 1fr 44px;align-items:center;gap:8px;margin:10px 0}
+.r i{font-style:normal;color:var(--m);font-size:12px;text-align:right}
+input[type=range]{width:100%;accent-color:#fff}
+input[type=color]{width:100%;height:30px;border:1px solid var(--l);border-radius:6px;background:var(--c);padding:2px}
+input[type=checkbox]{width:22px;height:22px;accent-color:#fff}
+input[type=text],input[type=number],textarea,select{width:100%;padding:10px;background:var(--c);border:1px solid var(--l);border-radius:8px;color:#fff;font:inherit}
+textarea{min-height:64px;font-family:Gotthard,system-ui}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.row>*{flex:1}
+button{padding:11px 12px;background:var(--c);border:1px solid var(--l);border-radius:8px;color:#fff;font:inherit;cursor:pointer}
+button.pri,button.on.ch{background:#fff;color:#000;border-color:#fff;font-weight:700}
+#dl{width:100%;padding:15px;font-size:15px;letter-spacing:.15em;text-transform:uppercase;margin-top:14px}
+footer{flex:none;text-align:center;color:var(--m);font-size:10px;padding:6px 8px;padding-bottom:max(6px,env(safe-area-inset-bottom));border-top:1px solid var(--l)}
+#ov{position:fixed;inset:0;background:#000e;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px}
+#ov[hidden]{display:none}#ov img{max-width:100%;max-height:70vh}
+.hint{color:var(--m);font-size:12px;margin:6px 0}
+</style></head><body>
+<header><img src="COOLT.png" alt="COOLT"><b>COOLT EDITOR</b></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="panel">
+<nav id="nav"></nav>
+<section id="bg"></section>
+<section id="lg"></section>
+<section id="tx"><div class="row" id="chips"></div><div id="tc"></div></section>
+<section id="ex"></section>
+</div>
+<footer>Разработчик Фёдоров И.Е. Специально для лейбла COOLT</footer>
+<div id="ov" hidden><img id="oi"><div class="hint">Зажмите изображение и выберите «Сохранить»</div><button onclick="ov.hidden=1">Закрыть</button></div>
+<script>
+const W=1254,tg=window.Telegram&&Telegram.WebApp;
+if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#0a0a0c');tg.setBackgroundColor('#0a0a0c')}catch(e){}}
+const $=s=>document.querySelector(s),cv=$('#cv'),cx=cv.getContext('2d'),off=document.createElement('canvas'),ov=$('#ov');
+cv.width=cv.height=W;
+const clamp=(v,a=.2,b=5)=>Math.min(b,Math.max(a,v)),FIL='filter' in cx;
+const S={bg:{color:'#111114',x:0,y:0,zoom:1,rot:0,flip:0,br:100,co:100,sa:100,bl:0,dim:0},
+big:{on:1,color:'#ffffff',op:100,th:0,dx:0,dy:0,sc:100},
+arcs:{on:1,color:'#ffffff',op:22},
+small:{on:1,color:'#ffffff',op:100,th:0,dx:0,dy:0,sc:100},
+it:[{pre:'CLT',n:'962',t:'CLT 962',x:1141,y:897,size:24,color:'#ffffff',op:100,sp:0,w:0}]};
+const G={big:[0,627,1254,627],arcs:[0,627,1254,627],small:[326,842,554,161]},A={};
+let img=null,sel=0,raf=0,syn=[];
+const load=s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=s});
+[['big','logo_big.png'],['arcs','arcs.png'],['small','logo_small.png']].forEach(([k,f])=>load(f).then(i=>{A[k]=i;go()}));
+
+function lay(c,k,fn,op){const n=Math.round(W*k);if(off.width!==n)off.width=off.height=n;
+ const o=off.getContext('2d');o.setTransform(1,0,0,1,0,0);o.clearRect(0,0,n,n);o.setTransform(k,0,0,k,0,0);fn(o);
+ c.globalAlpha=op/100;c.drawImage(off,0,0,W,W);c.globalAlpha=1}
+function logo(c,k,n){const s=S[n],im=A[n],g=G[n];if(!s.on||!im)return;
+ const sc=(s.sc||100)/100,w=g[2]*sc,h=g[3]*sc,x=g[0]+g[2]/2+(s.dx||0)-w/2,y=g[1]+g[3]/2+(s.dy||0)-h/2,t=s.th||0;
+ lay(c,k,o=>{o.drawImage(im,x,y,w,h);
+  if(t>0)for(const r of[t,t/2])for(let i=0;i<16;i++){const a=i*Math.PI/8;o.drawImage(im,x+Math.cos(a)*r,y+Math.sin(a)*r,w,h)}
+  o.globalCompositeOperation='source-in';o.fillStyle=s.color;o.fillRect(0,0,W,W);o.globalCompositeOperation='source-over'},s.op)}
+function txt(c,k,it){const L=it.t.split('\n'),lh=it.size*1.2;
+ lay(c,k,o=>{o.font=it.size+'px Gotthard';o.textAlign='center';o.textBaseline='middle';o.fillStyle=o.strokeStyle=it.color;
+  o.lineWidth=it.w;o.lineJoin='round';if('letterSpacing' in o)o.letterSpacing=it.sp+'px';
+  L.forEach((s,i)=>{const y=it.y+(i-(L.length-1)/2)*lh;if(it.w>0)o.strokeText(s,it.x,y);o.fillText(s,it.x,y)})},it.op)}
+function draw(c,k){c.setTransform(k,0,0,k,0,0);const b=S.bg;c.fillStyle=b.color;c.fillRect(0,0,W,W);
+ if(img){c.save();c.translate(W/2+b.x,W/2+b.y);c.rotate(b.rot*Math.PI/180);const z=b.zoom*Math.max(W/img.width,W/img.height);
+  c.scale(b.flip?-z:z,z);if(FIL)c.filter=`brightness(${b.br}%) contrast(${b.co}%) saturate(${b.sa}%) blur(${b.bl*k}px)`;
+  c.drawImage(img,-img.width/2,-img.height/2);c.restore();c.filter='none'}
+ if(b.dim){c.fillStyle=`rgba(0,0,0,${b.dim/100})`;c.fillRect(0,0,W,W)}
+ logo(c,k,'arcs');logo(c,k,'big');logo(c,k,'small');S.it.forEach(i=>txt(c,k,i));c.setTransform(1,0,0,1,0,0)}
+const go=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>draw(cx,1))};
+const sync=()=>{syn=syn.filter(f=>f())};
+
+function mk(p,label,type,o,k,a={}){const l=document.createElement('label'),inp=document.createElement('input'),v=document.createElement('i');
+ l.className='r';inp.type=type;Object.assign(inp,a);
+ const get=()=>{if(type==='checkbox')inp.checked=!!o[k];else inp.value=o[k];v.textContent=type==='range'?+(+o[k]).toFixed(2):'';return inp.isConnected};
+ inp.oninput=()=>{o[k]=type==='checkbox'?+inp.checked:type==='range'?+inp.value:inp.value;get();go()};
+ get();syn.push(get);l.append(label,inp,v);p.append(l)}
+const btn=(p,t,f,c)=>{const b=document.createElement('button');b.textContent=t;b.onclick=f;if(c)b.className=c;p.append(b);return b};
+const h3=(p,t)=>{const h=document.createElement('h3');h.textContent=t;p.append(h)};
+const row=p=>{const r=document.createElement('div');r.className='row';p.append(r);return r};
+
+// Tabs
+[['Фон','bg'],['Лого','lg'],['Текст / №','tx'],['Экспорт','ex']].forEach(([t,id],i)=>{
+ const b=btn($('#nav'),t,()=>{document.querySelectorAll('nav button,section').forEach(e=>e.classList.remove('on'));b.classList.add('on');$('#'+id).classList.add('on')});
+ if(!i)b.click()});
+
+// Background
+{const p=$('#bg'),fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.hidden=1;p.append(fi);
+ const r=row(p);btn(r,'Загрузить изображение',()=>fi.click(),'pri');btn(r,'Убрать',()=>{img=null;go()});
+ fi.onchange=async()=>{const f=fi.files[0];if(!f)return;img=await load(URL.createObjectURL(f));Object.assign(S.bg,{x:0,y:0,zoom:1,rot:0,flip:0});sync();go();fi.value=''};
+ p.insertAdjacentHTML('beforeend','<div class="hint">Двигайте фото пальцем по обложке, масштаб — щипком или колёсиком. Любой размер и пропорции.</div>');
+ const r2=row(p);btn(r2,'Заполнить',()=>{Object.assign(S.bg,{x:0,y:0,zoom:1,rot:0});sync();go()});
+ btn(r2,'↻ 90°',()=>{S.bg.rot=(S.bg.rot+90+180)%360-180;sync();go()});btn(r2,'⇋ Отразить',()=>{S.bg.flip^=1;go()});
+ mk(p,'Масштаб','range',S.bg,'zoom',{min:.2,max:5,step:.01});
+ mk(p,'Поворот °','range',S.bg,'rot',{min:-180,max:180,step:1});
+ mk(p,'Сдвиг X','range',S.bg,'x',{min:-1200,max:1200,step:1});
+ mk(p,'Сдвиг Y','range',S.bg,'y',{min:-1200,max:1200,step:1});
+ h3(p,'Цвет и эффекты');mk(p,'Цвет фона','color',S.bg,'color');
+ if(FIL){mk(p,'Яркость','range',S.bg,'br',{min:20,max:200,step:1});mk(p,'Контраст','range',S.bg,'co',{min:20,max:200,step:1});
+  mk(p,'Насыщенность','range',S.bg,'sa',{min:0,max:200,step:1});mk(p,'Размытие','range',S.bg,'bl',{min:0,max:30,step:.5})}
+ mk(p,'Затемнение','range',S.bg,'dim',{min:0,max:90,step:1})}
+
+// Logos
+{const p=$('#lg');p.insertAdjacentHTML('beforeend','<div class="hint">Логотип стоит на своём месте шаблона. Можно менять цвет, прозрачность, толщину и положение.</div>');
+ [['Большой логотип','big'],['Дуги на фоне','arcs'],['Малый логотип','small']].forEach(([t,n])=>{h3(p,t);const s=S[n];
+  mk(p,'Показать','checkbox',s,'on');mk(p,'Цвет','color',s,'color');mk(p,'Прозрачность','range',s,'op',{min:0,max:100,step:1});
+  if(n!=='arcs'){mk(p,'Толщина','range',s,'th',{min:0,max:14,step:.5});mk(p,'Масштаб %','range',s,'sc',{min:30,max:300,step:1});
+   mk(p,'Сдвиг X','range',s,'dx',{min:-500,max:500,step:1});mk(p,'Сдвиг Y','range',s,'dy',{min:-500,max:500,step:1})}})}
+
+// Text
+function ui(){const ch=$('#chips');ch.innerHTML='';
+ S.it.forEach((it,i)=>btn(ch,i?'Текст '+i:'№ трека',()=>{sel=i;ui();go()},'ch'+(i===sel?' on':'')));
+ btn(ch,'+ Текст',()=>{S.it.push({t:'Текст',x:W/2,y:300,size:90,color:'#ffffff',op:100,sp:0,w:0});sel=S.it.length-1;ui();go()});
+ const p=$('#tc');p.innerHTML='';const it=S.it[sel];
+ if(!sel){const r=row(p),a=document.createElement('input'),b=document.createElement('input');a.type=b.type='text';a.value=it.pre;b.value=it.n;b.inputMode='numeric';a.placeholder='CLT';b.placeholder='962';
+  a.oninput=b.oninput=()=>{it.pre=a.value;it.n=b.value;it.t=(it.pre+' '+it.n).trim();go()};r.append(a,b)}
+ else{const t=document.createElement('textarea');t.value=it.t;t.oninput=()=>{it.t=t.value;go()};p.append(t)}
+ mk(p,'Размер','range',it,'size',{min:8,max:400,step:1});mk(p,'Цвет','color',it,'color');mk(p,'Прозрачность','range',it,'op',{min:0,max:100,step:1});
+ mk(p,'Жирность','range',it,'w',{min:0,max:20,step:.5});mk(p,'Интервал','range',it,'sp',{min:-10,max:80,step:.5});
+ mk(p,'Позиция X','range',it,'x',{min:-100,max:W+100,step:1});mk(p,'Позиция Y','range',it,'y',{min:-100,max:W+100,step:1});
+ p.insertAdjacentHTML('beforeend','<div class="hint">Текст можно перетаскивать прямо по обложке. Шрифт — Gotthard.</div>');
+ if(sel)btn(p,'Удалить этот текст',()=>{S.it.splice(sel,1);sel=0;ui();go()})}
+ui();
+document.fonts.load('40px Gotthard').then(()=>{cx.font='100px Gotthard';S.it[0].size=Math.round(187/cx.measureText('CLT 962').width*100);ui();go()});
+
+// Export
+{const p=$('#ex');p.innerHTML=`<h3>Файл</h3><div class="r" style="grid-template-columns:96px 1fr"><span>Название</span><input type=text id=fn value="COOLT_CLT_962"></div>
+<div class="r" style="grid-template-columns:96px 1fr"><span>Формат</span><select id=fm><option value=png>PNG (без потерь)<option value=jpeg>JPG<option value=webp>WEBP</select></div>
+<div class="r" style="grid-template-columns:96px 1fr"><span>Размер</span><select id=sz><option>1000<option>2000<option selected>3000<option>4000</select></div>
+<div class="r" style="grid-template-columns:96px 1fr 44px"><span>Качество</span><input type=range id=q min=50 max=100 value=95><i>JPG/WEBP</i></div>
+<button class=pri id=dl>Скачать обложку</button><div class="hint">По умолчанию 3000×3000 px.</div>`;
+ $('#dl').onclick=async()=>{await document.fonts.ready;const n=+$('#sz').value,f=$('#fm').value,c=document.createElement('canvas');c.width=c.height=n;draw(c.getContext('2d'),n/W);
+  c.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=$('#fn').value+'.'+(f==='jpeg'?'jpg':f);a.click();
+   if(tg&&/ios|android/.test(tg.platform)){$('#oi').src=u;ov.hidden=0}go()},'image/'+f,$('#q').value/100)}}
+
+// Gestures
+const P=new Map();let drag=null,pd=0,z0=1;
+const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*W]};
+const dist=()=>{const[a,b]=[...P.values()];return Math.hypot(a[0]-b[0],a[1]-b[1])||1};
+function hit(x,y){for(let i=S.it.length-1;i>=0;i--){const it=S.it[i],L=it.t.split('\n');cx.font=it.size+'px Gotthard';
+ const w=Math.max(...L.map(s=>cx.measureText(s).width)),h=L.length*it.size*1.2;
+ if(Math.abs(x-it.x)<w/2+15&&Math.abs(y-it.y)<h/2+15)return i}return-1}
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);const p=pt(e);P.set(e.pointerId,p);
+ if(P.size===1){const i=hit(...p);drag=i>=0?{i,ox:S.it[i].x-p[0],oy:S.it[i].y-p[1]}:{};if(i>=0&&i!==sel){sel=i;ui()}}else{drag=null;pd=dist();z0=S.bg.zoom}};
+cv.onpointermove=e=>{if(!P.has(e.pointerId))return;const p=pt(e),q=P.get(e.pointerId);P.set(e.pointerId,p);
+ if(P.size===2)S.bg.zoom=clamp(z0*dist()/pd);
+ else if(drag&&'i' in drag){const it=S.it[drag.i];it.x=Math.round(p[0]+drag.ox);it.y=Math.round(p[1]+drag.oy)}
+ else if(drag){S.bg.x+=p[0]-q[0];S.bg.y+=p[1]-q[1]}
+ sync();go()};
+cv.onpointerup=cv.onpointercancel=e=>{P.delete(e.pointerId);drag=null};
+cv.onwheel=e=>{e.preventDefault();S.bg.zoom=clamp(S.bg.zoom*(e.deltaY<0?1.06:.94));sync();go()};
+go();
+</script></body></html>
